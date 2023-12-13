@@ -48,9 +48,15 @@ results = model.train(data='coco128.yaml', epochs=100, imgsz=640) # < Adicionar 
 ```
 
 ### Execução do Script: 
-Execute o script principal counter.py para iniciar a detecção e contagem de pessoas na portaria principal.
-
+Execute o script principal counter.py para iniciar a detecção e contagem de pessoas.<br>
 ``` python counter.py ```
+
+O script principal possui uma conexão opcional com um servidor WebSocket que pode ser configurada pelo usuário.<br>
+Você pode ativar um servidor de testes provido pelo projeto utilizando o comando: ``` python server.py ```<br>
+A porta e funções do servidor podem ser alteradas conforme o necessário.
+
+Você pode ativar o uso de WebSockets no script principal adicionando o argumento "websockets", desta forma:<br>
+``` python counter.py websockets ```
 
 ### Análise dos Resultados: 
 Os resultados serão apresentados no console e, se desejado, podem ser exportados para análises posteriores.
