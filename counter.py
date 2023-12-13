@@ -4,8 +4,21 @@ from tracker import *
 import cvzone
 import mediapipe as mp
 import json
+import argparse
 from websockets.sync.client import connect
 from ultralytics import YOLO
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    "websockets", 
+    type=str,
+    nargs='?',
+    default="",
+    help="Determines if the script uses WebSockets.",
+)
+args = parser.parse_args()
+arg_value = args.websockets
 
 project_name = "PEOPLE COUNTER"
 
@@ -50,7 +63,118 @@ white = (255, 255, 255)
 
 model = YOLO("yolov8n.pt")
 
-with connect("ws://localhost:8002") as websocket:
+if arg_value == "websockets":
+    with connect("ws://localhost:8002") as websocket:
+        while True:
+            ret, frame = video_capture.read()
+
+            if not ret:
+                break
+
+            frame = cv2.resize(frame, (win_width, win_height))
+
+            list = []
+
+            results = model.predict(frame)
+            detection_count = 0
+            person_count = 0
+
+            for r in results:
+                boxes = r.boxes
+                detection_count = r.boxes.shape[0]
+
+                for i in range(detection_count):
+                    cls = int(boxes.cls[i].item())
+                    bb = boxes.xyxy[i]
+
+                    if (
+                        cls == 0
+                    ):  # Destaque tanto pessoas (cls == 0) quanto bolsas (cls == 26)
+                        x, y, w, h = map(int, bb)
+
+                        if cls == 0:
+                            cv2.rectangle(
+                                frame, (x, y), (w, h), (0, 255, 0), 3
+                            )  # Cor verde para pessoas
+                            list.append([x, y, w, h])
+                            person_count += 1
+
+            bbox_idx = tracker.update(list)
+            for bbox in bbox_idx:
+                x1, y1, x2, y2, id = bbox
+                cx = int(x1 + x1 + x2) // 2
+                cy = int(y1 + y1 + y2) // 2
+
+                result = cv2.pointPolygonTest(
+                    np.array(area1, np.int32), ((cx, cy)), False
+                )
+
+                if result >= 0:
+                    er[id] = (cx, cy)
+
+                if id in er:
+                    result1 = cv2.pointPolygonTest(
+                        np.array(area2, np.int32), ((cx, cy)), False
+                    )
+
+                    if result1 >= 0:
+                        cv2.rectangle(frame, (x1, y1), (x2 + x1, y2 + y1), green, 3)
+                        cvzone.putTextRect(frame, f"{id}", (cx, cy), 2, 2)
+                        cv2.circle(frame, (cx, cy), 5, green, -1)
+
+                        if counter1.count(id) == 0:
+                            try:
+                                websocket.send(json.dumps({"payload": "ENTER"}))
+                            except Exception:
+                                print("Erro ao enviar websocket")
+                            counter1.append(id)
+
+                result2 = cv2.pointPolygonTest(
+                    np.array(area2, np.int32), ((cx, cy)), False
+                )
+
+                if result2 >= 0:
+                    ex[id] = (cx, cy)
+
+                if id in ex:
+                    result3 = cv2.pointPolygonTest(
+                        np.array(area1, np.int32), ((cx, cy)), False
+                    )
+
+                    if result3 >= 0:
+                        cv2.rectangle(frame, (x1, y1), (x2 + x1, y2 + y1), red, 3)
+                        cvzone.putTextRect(frame, f"{id}", (cx, cy), 2, 2)
+                        cv2.circle(frame, (cx, cy), 5, green, -1)
+
+                        if counter2.count(id) == 0:
+                            try:
+                                websocket.send(json.dumps({"payload": "ENTER"}))
+                            except Exception:
+                                print("Erro ao enviar websocket")
+                            counter2.append(id)
+
+            cv2.polylines(frame, [np.array(area1, np.int32)], True, red, 2)
+            cv2.polylines(frame, [np.array(area2, np.int32)], True, red, 2)
+
+            Enter = len(counter1)
+            Exit = len(counter2)
+
+            cvzone.putTextRect(frame, f"EXIT:-{Enter}", (50, 60), 2, 2)
+            cvzone.putTextRect(frame, f"ENTER:-{Exit}", (50, 130), 2, 2)
+            cvzone.putTextRect(frame, f"Quantity:-{person_count}", (50, 200), 2, 2)
+
+            cv2.imshow(project_name, frame)
+
+            # Press 'Esc' to exit
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
+
+    # Release the video capture and close windows
+    video_capture.release()
+    cv2.destroyAllWindows()
+else:
+    print("nao usando websockets")
+    
     while True:
         ret, frame = video_capture.read()
 
@@ -68,16 +192,20 @@ with connect("ws://localhost:8002") as websocket:
         for r in results:
             boxes = r.boxes
             detection_count = r.boxes.shape[0]
-        
+
             for i in range(detection_count):
                 cls = int(boxes.cls[i].item())
                 bb = boxes.xyxy[i]
 
-                if cls == 0:  # Destaque tanto pessoas (cls == 0) quanto bolsas (cls == 26)
+                if (
+                    cls == 0
+                ):  # Destaque tanto pessoas (cls == 0) quanto bolsas (cls == 26)
                     x, y, w, h = map(int, bb)
-                    
+
                     if cls == 0:
-                        cv2.rectangle(frame, (x, y), (w, h), (0, 255, 0), 3)  # Cor verde para pessoas
+                        cv2.rectangle(
+                            frame, (x, y), (w, h), (0, 255, 0), 3
+                        )  # Cor verde para pessoas
                         list.append([x, y, w, h])
                         person_count += 1
 
@@ -103,10 +231,6 @@ with connect("ws://localhost:8002") as websocket:
                     cv2.circle(frame, (cx, cy), 5, green, -1)
 
                     if counter1.count(id) == 0:
-                        try:
-                            websocket.send(json.dumps({"payload": "ENTER"}))
-                        except Exception:
-                            print("Erro ao enviar websocket")
                         counter1.append(id)
 
             result2 = cv2.pointPolygonTest(np.array(area2, np.int32), ((cx, cy)), False)
@@ -125,10 +249,6 @@ with connect("ws://localhost:8002") as websocket:
                     cv2.circle(frame, (cx, cy), 5, green, -1)
 
                     if counter2.count(id) == 0:
-                        try:
-                            websocket.send(json.dumps({"payload": "ENTER"}))
-                        except Exception:
-                            print("Erro ao enviar websocket")
                         counter2.append(id)
 
         cv2.polylines(frame, [np.array(area1, np.int32)], True, red, 2)
@@ -144,10 +264,9 @@ with connect("ws://localhost:8002") as websocket:
         cv2.imshow(project_name, frame)
 
         # Press 'Esc' to exit
-        if cv2.waitKey(30) & 0xFF == 27:
+        if cv2.waitKey(1) & 0xFF == 27:
             break
 
-
-# Release the video capture and close windows
-video_capture.release()
-cv2.destroyAllWindows()
+    # Release the video capture and close windows
+    video_capture.release()
+    cv2.destroyAllWindows()

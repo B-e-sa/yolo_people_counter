@@ -1,6 +1,5 @@
 import asyncio
 import websockets
-import json
 
 port = 8002
 connect_clients = set()
